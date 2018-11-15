@@ -142,7 +142,8 @@ class Router:
         self.cost_D = cost_D    # {neighbor: {interface: cost}}
         #TODO: set up the routing table for connected hosts
         self.rt_tbl_D = cost_D      # {destination: {router: cost}}
-        self.Big_table = {name: cost_D}
+        self.rt_tbl_D.update({name: {-1:0}})
+        self.Big_table = {name: self.rt_tbl_D}
         print('%s: Initialized routing table' % self)
         self.print_routes()
     
@@ -156,7 +157,7 @@ class Router:
         print("╕")
 
         print("| " + self.name + "   |", end="")
-        for i in self.rt_tbl_D:
+        for i in sorted(self.rt_tbl_D.keys()):
             print("   " + i + " |", end="")
         print("")
         
@@ -168,8 +169,8 @@ class Router:
         length = 1
         for i, j in self.Big_table.items():
             print("| " + i + "   ", end = "")
-            for a, b in j.items():
-                for c, d in b.items():
+            for a in sorted(j.keys()):
+                for c, d in (j.get(a).items()):
                     print("|    " + str(d) + " ", end = "")
             print("|")
             if length < len(self.Big_table.items()):
@@ -257,22 +258,22 @@ class Router:
         temp = {}
         for x in destinations:
             pair = x.split(",")
+            n1 = {pair[0]: {i: (int(pair[1])+offset)}}
+            t1 = {pair[0]: {i: int(pair[1])}}
+            temp.update(t1)
             if pair[0] in self.rt_tbl_D:
                 for y, z in self.rt_tbl_D[pair[0]].items():
-                    if int(pair[1]) < int(z):
-                        n1 = {pair[0]: {i: (int(pair[1])+offset)}}
+                    if int(pair[1]) < (int(z)-offset):
                         self.rt_tbl_D.update(n1)
                         updated = 1
-                        temp.update(n1)
             else:
-                n2 = {pair[0]: {i: (int(pair[1])+offset)}}
-                self.rt_tbl_D.update(n2)
-                temp.update(n2)
+
+                self.rt_tbl_D.update(n1)
                 updated = 1
         if updated == 1:
             for b in range(len(self.intf_L)):
                 self.send_routes(b)
-        b1 = {self.name: temp}
+        b1 = {source_table: temp}
         self.Big_table.update(b1)
         print('%s: Received routing update %s from interface %d' % (self, p, i))
         #self.print_routes()
