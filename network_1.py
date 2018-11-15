@@ -141,7 +141,8 @@ class Router:
         #save neighbors and interfeces on which we connect to them
         self.cost_D = cost_D    # {neighbor: {interface: cost}}
         #TODO: set up the routing table for connected hosts
-        self.rt_tbl_D = {}      # {destination: {router: cost}}
+        self.rt_tbl_D = cost_D      # {destination: {router: cost}}
+        self.Big_table = {name: cost_D}
         print('%s: Initialized routing table' % self)
         self.print_routes()
     
@@ -149,7 +150,39 @@ class Router:
     ## Print routing table
     def print_routes(self):
         #TODO: print the routes as a two dimensional table
-        print(self.rt_tbl_D)
+        print("╒══════", end="")
+        for i in range(len(self.rt_tbl_D)):
+            print("╤══════",end="")
+        print("╕")
+
+        print("| " + self.name + "   |", end="")
+        for i in self.rt_tbl_D:
+            print("   " + i + " |", end="")
+        print("")
+        
+        print("╞══════", end ="")
+        for i in range(len(self.rt_tbl_D)):
+            print("╪══════",end="")
+        print("╡")
+
+        length = 1
+        for i, j in self.Big_table.items():
+            print("| " + i + "   ", end = "")
+            for a, b in j.items():
+                for c, d in b.items():
+                    print("|    " + str(d) + " ", end = "")
+            print("|")
+            if length < len(self.Big_table.items()):
+                print("├──────", end="")
+                for x in range(len(self.rt_tbl_D)):
+                    print("┼──────", end="")
+                print("┤")
+                length += 1
+            else:
+                print("╘══════", end="")
+                for x in range(len(self.rt_tbl_D)):
+                    print("╧══════", end="")
+                print("╛")
 
 
     ## called when printing the object
@@ -194,9 +227,15 @@ class Router:
     ## send out route update
     # @param i Interface number on which to send out a routing update
     def send_routes(self, i):
-        # TODO: Send out a routing table update
         #create a routing table update packet
-        p = NetworkPacket(0, 'control', 'DUMMY_ROUTING_TABLE')
+        compressed = self.name + "/"
+        for x, y in self.rt_tbl_D.items():
+            compressed += (str(x) + ",")
+            for a, b in y.items():
+                   compressed += (str(b) + "|")
+
+        compressed = compressed[:-1]
+        p = NetworkPacket(0, 'control', compressed)
         try:
             print('%s: sending routing update "%s" from interface %d' % (self, p, i))
             self.intf_L[i].put(p.to_byte_S(), 'out', True)
@@ -208,9 +247,35 @@ class Router:
     ## forward the packet according to the routing table
     #  @param p Packet containing routing information
     def update_routes(self, p, i):
-        #TODO: add logic to update the routing tables and
         # possibly send out routing updates
+        routing_table = p.data_S.split("/")
+        source_table = routing_table[0]
+        cost = self.rt_tbl_D.get(source_table)
+        offset = cost[i]
+        destinations = routing_table[1].split("|")
+        updated = 0
+        temp = {}
+        for x in destinations:
+            pair = x.split(",")
+            if pair[0] in self.rt_tbl_D:
+                for y, z in self.rt_tbl_D[pair[0]].items():
+                    if int(pair[1]) < int(z):
+                        n1 = {pair[0]: {i: (int(pair[1])+offset)}}
+                        self.rt_tbl_D.update(n1)
+                        updated = 1
+                        temp.update(n1)
+            else:
+                n2 = {pair[0]: {i: (int(pair[1])+offset)}}
+                self.rt_tbl_D.update(n2)
+                temp.update(n2)
+                updated = 1
+        if updated == 1:
+            for b in range(len(self.intf_L)):
+                self.send_routes(b)
+        b1 = {self.name: temp}
+        self.Big_table.update(b1)
         print('%s: Received routing update %s from interface %d' % (self, p, i))
+        #self.print_routes()
 
                 
     ## thread target for the host to keep forwarding data
